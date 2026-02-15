@@ -6,7 +6,6 @@
 <title>Sistema Inteligente Lotofácil</title>
 
 <style>
-/* ================= DARK THEME ================= */
 body {
   background: #0f172a;
   color: #e5e7eb;
@@ -39,7 +38,7 @@ body {
   margin-top: 25px;
 }
 
-/* ================= GRID DE NÚMEROS ================= */
+/* GRID */
 .grid {
   display: grid;
   grid-template-columns: repeat(10, 48px);
@@ -62,13 +61,21 @@ body {
   background: #2563eb;
 }
 
-.num.sel {
+/* 🔴 DEZENAS SORTEADAS (VERMELHO FRACO) */
+.num.sorteado {
+  background: #ef4444;
+  color: white;
+  font-weight: bold;
+}
+
+/* 🟢 JOGOS (VERDE) */
+.num.jogo {
   background: #22c55e;
   color: black;
   font-weight: bold;
 }
 
-/* ================= JOGOS ================= */
+/* JOGOS */
 .jogos-linha {
   display: flex;
   gap: 15px;
@@ -89,10 +96,9 @@ body {
   color: #facc15;
 }
 
-/* ================= BOTÃO ================= */
+/* BOTÃO */
 .btn-conferir {
-  margin-top: 15px;
-  width: 350px
+  width: 350px;
   max-width: 100%;
   display: block;
   margin: 15px auto;
@@ -111,7 +117,7 @@ body {
   opacity: 0.9;
 }
 
-/* ================= RESULTADO ================= */
+/* RESULTADO */
 #resultado {
   margin-top: 15px;
   max-width: 650px;
@@ -140,7 +146,6 @@ td, th {
   font-weight: bold;
 }
 
-/* ================= FOOTER ================= */
 footer {
   text-align: center;
   margin-top: 15px;
@@ -148,18 +153,13 @@ footer {
   color: #64748b;
 }
 
-/* ================= MOBILE ================= */
+/* MOBILE */
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: repeat(5, 1fr);
   }
-
   .jogos-linha {
     flex-direction: column;
-  }
-
-  .btn-conferir {
-    font-size: 18px;
   }
 }
 </style>
@@ -208,7 +208,7 @@ footer {
 </div>
 
 <script>
-/* ================= CRIAR GRADES ================= */
+/* CRIAR GRADES */
 function criarGrade(id){
   let grid = document.getElementById(id);
   let set = new Set();
@@ -222,11 +222,18 @@ function criarGrade(id){
     d.onclick = () => {
       if(set.has(i)){
         set.delete(i);
-        d.classList.remove("sel");
-      } else {
+        d.classList.remove("sorteado");
+        d.classList.remove("jogo");
+      } 
+      else {
         if(set.size >= 15) return;
         set.add(i);
-        d.classList.add("sel");
+
+        if(id === "gridSorteio"){
+          d.classList.add("sorteado"); // 🔴 sorteio
+        } else {
+          d.classList.add("jogo"); // 🟢 jogos
+        }
       }
     };
 
@@ -243,7 +250,7 @@ let jogo2 = criarGrade("gridJ2");
 let jogo3 = criarGrade("gridJ3");
 let jogo4 = criarGrade("gridJ4");
 
-/* ================= CONFERIR ================= */
+/* CONFERIR */
 function conferir(){
   if(sorteioSet.size !== 15){
     alert("Selecione exatamente 15 dezenas sorteadas!");
@@ -276,12 +283,6 @@ function conferir(){
 
   html += "</table>";
   document.getElementById("resultado").innerHTML = html;
-
-  // ✅ AUTO SCROLL
-  document.getElementById("resultado").scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
 }
 </script>
 
