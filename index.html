@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Inteligente Lotofácil</title>
+
+<style>
+/* ================= DARK THEME ================= */
+body {
+  background: #0f172a;
+  color: #e5e7eb;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+  padding: 15px;
+}
+
+.header {
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.section-title {
+  margin-top: 20px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #93c5fd;
+}
+
+.jogos-title {
+  margin-top: 25px;
+}
+
+/* ================= GRID DE NÚMEROS ================= */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(10, 48px);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.num {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 15px;
+  transition: 0.2s;
+}
+
+.num:hover {
+  background: #2563eb;
+}
+
+.num.sel {
+  background: #22c55e;
+  color: black;
+  font-weight: bold;
+}
+
+/* ================= JOGOS ================= */
+.jogos-linha {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.jogo-box {
+  flex: 1;
+  border: 1px solid #334155;
+  padding: 8px;
+  border-radius: 8px;
+  background: #111827;
+}
+
+.jogo-box h3 {
+  margin: 3px 0;
+  font-size: 15px;
+  color: #facc15;
+}
+
+/* ================= BOTÃO ================= */
+.btn-conferir {
+  margin-top: 15px;
+  width: 350px
+  max-width: 100%;
+  display: block;
+  margin: 15px auto;
+  background: linear-gradient(90deg, #7c3aed, #2563eb);
+  color: white;
+  border: none;
+  padding: 14px;
+  font-size: 20px;
+  font-weight: bold;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(124,58,237,0.6);
+}
+
+.btn-conferir:hover {
+  opacity: 0.9;
+}
+
+/* ================= RESULTADO ================= */
+#resultado {
+  margin-top: 15px;
+  max-width: 650px;
+  width: 100%;
+  margin: 15px auto;
+  background: #020617;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+td, th {
+  border-bottom: 1px solid #334155;
+  padding: 6px;
+  text-align: left;
+}
+
+.acerto-premio {
+  color: #7dd3fc;
+  font-weight: bold;
+}
+
+/* ================= FOOTER ================= */
+footer {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .jogos-linha {
+    flex-direction: column;
+  }
+
+  .btn-conferir {
+    font-size: 18px;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="header">🎯 Conferência Automática Lotofácil</div>
+
+<div class="section-title">Dezenas Sorteadas (selecione 15)</div>
+<div id="gridSorteio" class="grid"></div>
+
+<div class="section-title jogos-title">Seus Jogos</div>
+
+<div class="jogos-linha">
+  <div class="jogo-box">
+    <h3>Jogo 1</h3>
+    <div id="gridJ1" class="grid"></div>
+  </div>
+
+  <div class="jogo-box">
+    <h3>Jogo 2</h3>
+    <div id="gridJ2" class="grid"></div>
+  </div>
+</div>
+
+<div class="jogos-linha">
+  <div class="jogo-box">
+    <h3>Jogo 3</h3>
+    <div id="gridJ3" class="grid"></div>
+  </div>
+
+  <div class="jogo-box">
+    <h3>Jogo 4</h3>
+    <div id="gridJ4" class="grid"></div>
+  </div>
+</div>
+
+<button class="btn-conferir" onclick="conferir()">Conferir Jogos</button>
+
+<div id="resultado"></div>
+
+<footer>Desenvolvido por Janer Dorneles • Lotofácil Checker</footer>
+
+</div>
+
+<script>
+/* ================= CRIAR GRADES ================= */
+function criarGrade(id){
+  let grid = document.getElementById(id);
+  let set = new Set();
+  let frag = document.createDocumentFragment();
+
+  for(let i=1;i<=25;i++){
+    let d = document.createElement("div");
+    d.className = "num";
+    d.innerText = String(i).padStart(2,'0');
+
+    d.onclick = () => {
+      if(set.has(i)){
+        set.delete(i);
+        d.classList.remove("sel");
+      } else {
+        if(set.size >= 15) return;
+        set.add(i);
+        d.classList.add("sel");
+      }
+    };
+
+    frag.appendChild(d);
+  }
+
+  grid.appendChild(frag);
+  return set;
+}
+
+let sorteioSet = criarGrade("gridSorteio");
+let jogo1 = criarGrade("gridJ1");
+let jogo2 = criarGrade("gridJ2");
+let jogo3 = criarGrade("gridJ3");
+let jogo4 = criarGrade("gridJ4");
+
+/* ================= CONFERIR ================= */
+function conferir(){
+  if(sorteioSet.size !== 15){
+    alert("Selecione exatamente 15 dezenas sorteadas!");
+    return;
+  }
+
+  let jogos = [
+    {nome:"Jogo 1", set:jogo1},
+    {nome:"Jogo 2", set:jogo2},
+    {nome:"Jogo 3", set:jogo3},
+    {nome:"Jogo 4", set:jogo4}
+  ];
+
+  let html = "<table><tr><th>Jogo</th><th>Dezenas Acertadas</th><th>Acertos</th></tr>";
+
+  jogos.forEach(j => {
+    if(j.set.size === 0) return;
+
+    let acertos = [...j.set].filter(n => sorteioSet.has(n));
+    let qtd = acertos.length;
+
+    let classe = (qtd >= 11) ? "acerto-premio" : "";
+
+    html += `<tr>
+      <td>${j.nome}</td>
+      <td>${acertos.map(n=>String(n).padStart(2,'0')).join(", ")}</td>
+      <td class="${classe}">${qtd} acertos</td>
+    </tr>`;
+  });
+
+  html += "</table>";
+  document.getElementById("resultado").innerHTML = html;
+
+  // ✅ AUTO SCROLL
+  document.getElementById("resultado").scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+</script>
+
+</body>
+</html>
