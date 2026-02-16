@@ -531,9 +531,7 @@ function conferir(){
   resultado.classList.add('show');
 
   // Rolagem automática
-  setTimeout(() => {
-    resultado.scrollIntoView({behavior:"smooth", block:"nearest"});
-  }, 100);
+  document.getElementById("resultado").scrollIntoView({behavior:"smooth"});
 }
 
 /* PERSISTÊNCIA - LocalStorage */
@@ -590,3 +588,4 @@ window.addEventListener('DOMContentLoaded', carregarEstado);
 
 </body>
 </html>
+
