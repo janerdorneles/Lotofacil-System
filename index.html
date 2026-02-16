@@ -32,6 +32,19 @@ body {
   font-size: 16px;
   font-weight: bold;
   color: #93c5fd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.contador {
+  font-size: 14px;
+  color: #facc15;
+  font-weight: normal;
+}
+
+.contador.completo {
+  color: #22c55e;
 }
 
 .jogos-title {
@@ -55,17 +68,24 @@ body {
   cursor: pointer;
   font-size: 15px;
   transition: 0.2s;
+  user-select: none;
 }
 
 .num:hover {
   background: #2563eb;
+  transform: scale(1.05);
 }
 
-/* 🔴 DEZENAS SORTEADAS (VERMELHO FRACO) */
+.num:active {
+  transform: scale(0.95);
+}
+
+/* 🔴 DEZENAS SORTEADAS (VERMELHO) */
 .num.sorteado {
   background: #ef4444;
   color: white;
   font-weight: bold;
+  border-color: #dc2626;
 }
 
 /* 🟢 JOGOS (VERDE) */
@@ -73,6 +93,7 @@ body {
   background: #22c55e;
   color: black;
   font-weight: bold;
+  border-color: #16a34a;
 }
 
 /* JOGOS */
@@ -94,27 +115,61 @@ body {
   margin: 3px 0;
   font-size: 15px;
   color: #facc15;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-/* BOTÃO */
-.btn-conferir {
-  width: 350px;
-  max-width: 100%;
-  display: block;
+.jogo-contador {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+
+.jogo-contador.completo {
+  color: #22c55e;
+}
+
+/* BOTÕES */
+.btn-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
   margin: 15px auto;
+  flex-wrap: wrap;
+}
+
+.btn {
   background: linear-gradient(90deg, #7c3aed, #2563eb);
   color: white;
   border: none;
-  padding: 14px;
-  font-size: 20px;
+  padding: 14px 28px;
+  font-size: 18px;
   font-weight: bold;
   border-radius: 10px;
   cursor: pointer;
   box-shadow: 0 0 10px rgba(124,58,237,0.6);
+  transition: 0.2s;
 }
 
-.btn-conferir:hover {
+.btn:hover {
   opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: linear-gradient(90deg, #64748b, #475569);
+  box-shadow: 0 0 10px rgba(100,116,139,0.4);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* RESULTADO */
@@ -129,6 +184,21 @@ body {
   border: 1px solid #334155;
 }
 
+#resultado.show {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -137,8 +207,14 @@ table {
 
 td, th {
   border-bottom: 1px solid #334155;
-  padding: 6px;
+  padding: 8px;
   text-align: left;
+}
+
+th {
+  background: #1e293b;
+  font-weight: bold;
+  color: #93c5fd;
 }
 
 .acerto-premio {
@@ -146,9 +222,20 @@ td, th {
   font-weight: bold;
 }
 
+.acerto-15 {
+  color: #fbbf24;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.jogo-vazio {
+  color: #64748b;
+  font-style: italic;
+}
+
 footer {
   text-align: center;
-  margin-top: 15px;
+  margin-top: 20px;
   font-size: 12px;
   color: #64748b;
 }
@@ -161,6 +248,45 @@ footer {
   .jogos-linha {
     flex-direction: column;
   }
+  .btn-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .btn {
+    width: 100%;
+  }
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+}
+
+/* Toast de notificação */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #e5e7eb;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  z-index: 1000;
+  animation: toastIn 0.3s ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 </style>
 </head>
@@ -170,36 +296,56 @@ footer {
 
 <div class="header">🎯 Conferência Automática Lotofácil</div>
 
-<div class="section-title">Dezenas Sorteadas (selecione 15)</div>
+<div class="section-title">
+  <span>Dezenas Sorteadas (selecione 15)</span>
+  <span class="contador" id="contadorSorteio">0/15</span>
+</div>
 <div id="gridSorteio" class="grid"></div>
 
-<div class="section-title jogos-title">Seus Jogos</div>
+<div class="section-title jogos-title">
+  <span>Seus Jogos</span>
+</div>
 
 <div class="jogos-linha">
   <div class="jogo-box">
-    <h3>Jogo 1</h3>
+    <h3>
+      <span>Jogo 1</span>
+      <span class="jogo-contador" id="contadorJ1">0/15</span>
+    </h3>
     <div id="gridJ1" class="grid"></div>
   </div>
 
   <div class="jogo-box">
-    <h3>Jogo 2</h3>
+    <h3>
+      <span>Jogo 2</span>
+      <span class="jogo-contador" id="contadorJ2">0/15</span>
+    </h3>
     <div id="gridJ2" class="grid"></div>
   </div>
 </div>
 
 <div class="jogos-linha">
   <div class="jogo-box">
-    <h3>Jogo 3</h3>
+    <h3>
+      <span>Jogo 3</span>
+      <span class="jogo-contador" id="contadorJ3">0/15</span>
+    </h3>
     <div id="gridJ3" class="grid"></div>
   </div>
 
   <div class="jogo-box">
-    <h3>Jogo 4</h3>
+    <h3>
+      <span>Jogo 4</span>
+      <span class="jogo-contador" id="contadorJ4">0/15</span>
+    </h3>
     <div id="gridJ4" class="grid"></div>
   </div>
 </div>
 
-<button class="btn-conferir" onclick="conferir()">Conferir Jogos</button>
+<div class="btn-group">
+  <button class="btn" onclick="conferir()">Conferir Jogos</button>
+  <button class="btn btn-secondary" onclick="limparTudo()">Limpar Tudo</button>
+</div>
 
 <div id="resultado"></div>
 
@@ -208,8 +354,36 @@ footer {
 </div>
 
 <script>
+/* GERENCIAMENTO DE CONTADORES */
+function atualizarContador(id, set, maxNumeros = 15) {
+  const contador = document.getElementById(`contador${id}`);
+  if (!contador) return;
+  
+  const qtd = set.size;
+  contador.textContent = `${qtd}/${maxNumeros}`;
+  
+  if (qtd === maxNumeros) {
+    contador.classList.add('completo');
+  } else {
+    contador.classList.remove('completo');
+  }
+}
+
+/* TOAST DE NOTIFICAÇÃO */
+function mostrarToast(mensagem) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = mensagem;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'toastIn 0.3s ease-out reverse';
+    setTimeout(() => toast.remove(), 300);
+  }, 2000);
+}
+
 /* CRIAR GRADES */
-function criarGrade(id){
+function criarGrade(id, contadorId = null){
   let grid = document.getElementById(id);
   let set = new Set();
   let frag = document.createDocumentFragment();
@@ -218,22 +392,48 @@ function criarGrade(id){
     let d = document.createElement("div");
     d.className = "num";
     d.innerText = String(i).padStart(2,'0');
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', `Número ${i}`);
+    d.setAttribute('tabindex', '0');
 
-    d.onclick = () => {
+    const toggleNumero = () => {
       if(set.has(i)){
         set.delete(i);
         d.classList.remove("sorteado");
         d.classList.remove("jogo");
+        d.setAttribute('aria-pressed', 'false');
       } 
       else {
-        if(set.size >= 15) return;
+        if(set.size >= 15) {
+          mostrarToast('Máximo de 15 números atingido');
+          return;
+        }
         set.add(i);
+        d.setAttribute('aria-pressed', 'true');
 
         if(id === "gridSorteio"){
-          d.classList.add("sorteado"); // 🔴 sorteio
+          d.classList.add("sorteado");
         } else {
-          d.classList.add("jogo"); // 🟢 jogos
+          d.classList.add("jogo");
         }
+      }
+      
+      // Atualizar contador
+      if(contadorId) {
+        atualizarContador(contadorId, set);
+      }
+      
+      // Salvar no localStorage
+      salvarEstado();
+    };
+
+    d.onclick = toggleNumero;
+    
+    // Acessibilidade: suporte a teclado
+    d.onkeydown = (e) => {
+      if(e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleNumero();
       }
     };
 
@@ -244,16 +444,39 @@ function criarGrade(id){
   return set;
 }
 
-let sorteioSet = criarGrade("gridSorteio");
-let jogo1 = criarGrade("gridJ1");
-let jogo2 = criarGrade("gridJ2");
-let jogo3 = criarGrade("gridJ3");
-let jogo4 = criarGrade("gridJ4");
+let sorteioSet = criarGrade("gridSorteio", "Sorteio");
+let jogo1 = criarGrade("gridJ1", "J1");
+let jogo2 = criarGrade("gridJ2", "J2");
+let jogo3 = criarGrade("gridJ3", "J3");
+let jogo4 = criarGrade("gridJ4", "J4");
+
+/* LIMPAR TUDO */
+function limparTudo() {
+  if(!confirm('Deseja realmente limpar todas as seleções?')) return;
+  
+  [sorteioSet, jogo1, jogo2, jogo3, jogo4].forEach(set => set.clear());
+  
+  document.querySelectorAll('.num').forEach(num => {
+    num.classList.remove('sorteado', 'jogo');
+    num.setAttribute('aria-pressed', 'false');
+  });
+  
+  // Atualizar contadores
+  atualizarContador('Sorteio', sorteioSet);
+  atualizarContador('J1', jogo1);
+  atualizarContador('J2', jogo2);
+  atualizarContador('J3', jogo3);
+  atualizarContador('J4', jogo4);
+  
+  document.getElementById('resultado').innerHTML = '';
+  localStorage.removeItem('lotofacilData');
+  mostrarToast('Todas as seleções foram limpas');
+}
 
 /* CONFERIR */
 function conferir(){
   if(sorteioSet.size !== 15){
-    alert("Selecione exatamente 15 dezenas sorteadas!");
+    mostrarToast('Selecione exatamente 15 dezenas sorteadas!');
     return;
   }
 
@@ -264,29 +487,105 @@ function conferir(){
     {nome:"Jogo 4", set:jogo4}
   ];
 
+  // Verificar se há pelo menos um jogo preenchido
+  const temJogos = jogos.some(j => j.set.size > 0);
+  if(!temJogos) {
+    mostrarToast('Preencha pelo menos um jogo para conferir');
+    return;
+  }
+
   let html = "<table><tr><th>Jogo</th><th>Dezenas Acertadas</th><th>Acertos</th></tr>";
 
   jogos.forEach(j => {
-    if(j.set.size === 0) return;
+    if(j.set.size === 0) {
+      html += `<tr>
+        <td>${j.nome}</td>
+        <td class="jogo-vazio" colspan="2">Jogo não preenchido</td>
+      </tr>`;
+      return;
+    }
 
-    let acertos = [...j.set].filter(n => sorteioSet.has(n));
+    let acertos = [...j.set].filter(n => sorteioSet.has(n)).sort((a,b) => a-b);
     let qtd = acertos.length;
 
-    let classe = (qtd >= 11) ? "acerto-premio" : "";
+    let classe = "";
+    if(qtd === 15) classe = "acerto-15";
+    else if(qtd >= 11) classe = "acerto-premio";
+
+    let emoji = "";
+    if(qtd === 15) emoji = " 🏆";
+    else if(qtd >= 14) emoji = " 🎉";
+    else if(qtd >= 11) emoji = " ✅";
 
     html += `<tr>
-      <td>${j.nome}</td>
-      <td>${acertos.map(n=>String(n).padStart(2,'0')).join(", ")}</td>
-      <td class="${classe}">${qtd} acertos</td>
+      <td><strong>${j.nome}</strong></td>
+      <td>${acertos.length > 0 ? acertos.map(n=>String(n).padStart(2,'0')).join(", ") : '-'}</td>
+      <td class="${classe}">${qtd} acertos${emoji}</td>
     </tr>`;
   });
 
   html += "</table>";
-  document.getElementById("resultado").innerHTML = html;
+  
+  const resultado = document.getElementById("resultado");
+  resultado.innerHTML = html;
+  resultado.classList.add('show');
 
-  // 🔽 ROLAGEM AUTOMÁTICA
-  document.getElementById("resultado").scrollIntoView({behavior:"smooth"});
+  // Rolagem automática
+  setTimeout(() => {
+    resultado.scrollIntoView({behavior:"smooth", block:"nearest"});
+  }, 100);
 }
+
+/* PERSISTÊNCIA - LocalStorage */
+function salvarEstado() {
+  const estado = {
+    sorteio: [...sorteioSet],
+    jogo1: [...jogo1],
+    jogo2: [...jogo2],
+    jogo3: [...jogo3],
+    jogo4: [...jogo4]
+  };
+  localStorage.setItem('lotofacilData', JSON.stringify(estado));
+}
+
+function carregarEstado() {
+  const data = localStorage.getItem('lotofacilData');
+  if(!data) return;
+  
+  try {
+    const estado = JSON.parse(data);
+    
+    const restaurarSet = (set, numeros, gridId, classe) => {
+      numeros.forEach(num => {
+        set.add(num);
+        const elem = document.querySelector(`#${gridId} .num:nth-child(${num})`);
+        if(elem) {
+          elem.classList.add(classe);
+          elem.setAttribute('aria-pressed', 'true');
+        }
+      });
+    };
+    
+    restaurarSet(sorteioSet, estado.sorteio, 'gridSorteio', 'sorteado');
+    restaurarSet(jogo1, estado.jogo1, 'gridJ1', 'jogo');
+    restaurarSet(jogo2, estado.jogo2, 'gridJ2', 'jogo');
+    restaurarSet(jogo3, estado.jogo3, 'gridJ3', 'jogo');
+    restaurarSet(jogo4, estado.jogo4, 'gridJ4', 'jogo');
+    
+    // Atualizar contadores
+    atualizarContador('Sorteio', sorteioSet);
+    atualizarContador('J1', jogo1);
+    atualizarContador('J2', jogo2);
+    atualizarContador('J3', jogo3);
+    atualizarContador('J4', jogo4);
+    
+  } catch(e) {
+    console.error('Erro ao carregar dados salvos:', e);
+  }
+}
+
+// Carregar estado salvo ao iniciar
+window.addEventListener('DOMContentLoaded', carregarEstado);
 </script>
 
 </body>
