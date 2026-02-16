@@ -35,6 +35,45 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.btn-modos {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-modo {
+  background: #475569;
+  color: #e5e7eb;
+  border: 1px solid #64748b;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.btn-modo:hover {
+  background: #64748b;
+  transform: translateY(-1px);
+}
+
+.btn-modo:active {
+  transform: translateY(0);
+}
+
+.btn-modo.ativo {
+  background: #059669;
+  border-color: #10b981;
+  box-shadow: 0 0 8px rgba(5, 150, 105, 0.4);
+}
+
+.btn-modo.ativo:hover {
+  background: #10b981;
 }
 
 .contador {
@@ -240,6 +279,49 @@ footer {
   color: #64748b;
 }
 
+/* CONCURSO */
+.concurso-section {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.concurso-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.concurso-box label {
+  font-weight: bold;
+  color: #93c5fd;
+}
+
+.concurso-box select {
+  background: #1e293b;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.concurso-box select:hover {
+  border-color: #2563eb;
+}
+
+.concurso-data {
+  color: #fb923c; /* Laranja */
+  font-weight: bold;
+  font-size: 14px;
+}
+
 /* MOBILE */
 @media (max-width: 768px) {
   .grid {
@@ -278,6 +360,10 @@ footer {
   animation: toastIn 0.3s ease-out;
 }
 
+.toast.saindo {
+  animation: toastOut 0.3s ease-out forwards;
+}
+
 @keyframes toastIn {
   from {
     opacity: 0;
@@ -288,6 +374,17 @@ footer {
     transform: translate(-50%, 0);
   }
 }
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+}
 </style>
 </head>
 
@@ -295,6 +392,28 @@ footer {
 <div class="container">
 
 <div class="header">🎯 Conferência Automática Lotofácil</div>
+
+<!-- SELEÇÃO DE CONCURSO -->
+<div class="concurso-section">
+  <div class="section-title">
+    <span>🎲 Selecione o Concurso</span>
+    <div class="btn-modos">
+      <button id="btnModoOffline" class="btn-modo" onclick="forcarModoOffline()" title="Ativar modo offline para seleção manual">
+        📴 Modo Offline
+      </button>
+      <button id="btnModoOnline" class="btn-modo" onclick="forcarModoOnline()" title="Recarregar concursos da API">
+        🌐 Modo Online
+      </button>
+    </div>
+  </div>
+  <div class="concurso-box">
+    <label for="selectConcurso">Concurso:</label>
+    <select id="selectConcurso" onchange="carregarConcurso()">
+      <option value="">Carregando concursos...</option>
+    </select>
+    <span class="concurso-data" id="concursoData"></span>
+  </div>
+</div>
 
 <div class="section-title">
   <span>Dezenas Sorteadas (selecione 15)</span>
@@ -354,44 +473,278 @@ footer {
 </div>
 
 <script>
-/* GERENCIAMENTO DE CONTADORES */
-function atualizarContador(id, set, maxNumeros = 15) {
-  const contador = document.getElementById(`contador${id}`);
+/* ============================================
+   CONSTANTES E CONFIGURAÇÃO
+============================================ */
+const CONFIG = {
+  MAX_NUMEROS: 15,
+  TOTAL_NUMEROS: 25,
+  QTD_ULTIMOS_CONCURSOS: 90,
+  API_URL: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil',
+  TOAST_DURATION: 2000,
+  STORAGE_KEY: 'lotofacilData'
+};
+
+/* ⚙️ CONFIGURAÇÃO LEGADA (manter compatibilidade) */
+const QUANTIDADE_CONCURSOS = 7; // Mude para 3, 5, 7, 10, 15, etc.
+
+/* ESTADO GLOBAL */
+let concursos = [];
+let toastAtual = null; // OTIMIZAÇÃO: controle de toast único
+
+/* ============================================
+   UTILITÁRIOS
+============================================ */
+
+// OTIMIZAÇÃO: Cache de elementos DOM
+const elementos = {};
+const getElemento = (id) => {
+  if (!elementos[id]) {
+    elementos[id] = document.getElementById(id);
+  }
+  return elementos[id];
+};
+
+// OTIMIZAÇÃO: Função de formatação centralizada
+const formatarNumero = (num) => String(num).padStart(2, '0');
+
+/* ============================================
+   API - BUSCAR CONCURSOS
+============================================ */
+async function buscarUltimosConcursos() {
+  // Verificar se está online ANTES de tentar buscar
+  if (!navigator.onLine) {
+    mostrarModoOffline();
+    return;
+  }
+  
+  try {
+    // OTIMIZAÇÃO: Buscar o último concurso com timeout de 10 segundos
+    const controlador = new AbortController();
+    const timeoutId = setTimeout(() => controlador.abort(), 10000);
+    
+    const responseUltimo = await fetch(CONFIG.API_URL, {
+      cache: 'no-store',
+      signal: controlador.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!responseUltimo.ok) {
+      throw new Error('Erro na API');
+    }
+    
+    const ultimoConcurso = await responseUltimo.json();
+    const numeroUltimo = ultimoConcurso.numero;
+    
+    // OTIMIZAÇÃO: Buscar todos em paralelo com Promise.all (muito mais rápido!)
+    const promises = [];
+    for (let i = 0; i < QUANTIDADE_CONCURSOS; i++) {
+      const numConcurso = numeroUltimo - i;
+      promises.push(
+        fetch(`${CONFIG.API_URL}/${numConcurso}`, { cache: 'no-store' })
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      );
+    }
+    
+    const resultados = await Promise.all(promises);
+    
+    concursos = resultados
+      .filter(dados => dados && dados.numero && dados.listaDezenas)
+      .map(dados => ({
+        numero: dados.numero,
+        data: dados.dataApuracao,
+        dezenas: dados.listaDezenas.map(d => parseInt(d)).sort((a, b) => a - b)
+      }));
+    
+    if (concursos.length === 0) {
+      throw new Error('Nenhum concurso carregado');
+    }
+    
+    popularConcursos();
+    alternarModo(true);
+    
+  } catch (error) {
+    console.error('Erro ao buscar concursos:', error);
+    mostrarModoOffline();
+  }
+}
+
+/* ============================================
+   MODO ONLINE/OFFLINE
+============================================ */
+
+// OTIMIZAÇÃO: Função unificada para alternar modo (substitui ativarBotaoOffline e ativarBotaoOnline)
+function alternarModo(online) {
+  const btnOnline = getElemento('btnModoOnline');
+  const btnOffline = getElemento('btnModoOffline');
+  
+  if (online) {
+    btnOnline.classList.add('ativo');
+    btnOffline.classList.remove('ativo');
+  } else {
+    btnOnline.classList.remove('ativo');
+    btnOffline.classList.add('ativo');
+  }
+}
+
+function mostrarModoOffline() {
+  const select = getElemento('selectConcurso');
+  select.innerHTML = '<option value="">📴 Offline: Informe as dezenas manualmente</option>';
+  select.disabled = true;
+  select.style.cursor = 'not-allowed';
+  
+  const dataElement = getElemento('concursoData');
+  dataElement.innerHTML = '<span style="color: #ef4444;">Sem conexão</span>';
+  
+  alternarModo(false);
+}
+
+function forcarModoOffline() {
+  if(confirm('Ativar modo offline? Isso limpará a lista de concursos e você deverá selecionar as dezenas manualmente.')) {
+    mostrarModoOffline();
+    limparSorteio();
+    mostrarToast('Modo offline ativado. Selecione as dezenas manualmente.');
+  }
+}
+
+async function forcarModoOnline() {
+  if(confirm('Recarregar concursos da API? Isso irá buscar os últimos concursos disponíveis.')) {
+    const select = getElemento('selectConcurso');
+    select.innerHTML = '<option value="">Carregando concursos...</option>';
+    select.disabled = false;
+    select.style.cursor = 'default';
+    
+    getElemento('concursoData').textContent = '';
+    limparSorteio();
+    
+    alternarModo(true); // OTIMIZAÇÃO: Usar função unificada
+    
+    mostrarToast('Buscando concursos...');
+    await buscarUltimosConcursos();
+    
+    if(concursos.length > 0) {
+      mostrarToast('Concursos carregados com sucesso!');
+    }
+  }
+}
+
+/* ============================================
+   CONCURSOS
+============================================ */
+
+function popularConcursos() {
+  const select = getElemento('selectConcurso');
+  select.innerHTML = '<option value="">Selecione...</option>';
+  
+  // OTIMIZAÇÃO: usar DocumentFragment para adicionar múltiplos elementos de uma vez
+  const fragment = document.createDocumentFragment();
+  concursos.forEach(c => {
+    const option = document.createElement('option');
+    option.value = c.numero;
+    option.textContent = c.numero;
+    option.dataset.data = c.data;
+    fragment.appendChild(option);
+  });
+  select.appendChild(fragment);
+}
+
+function carregarConcurso() {
+  const select = getElemento('selectConcurso');
+  const concursoNum = select.value;
+  
+  if (!concursoNum) {
+    getElemento('concursoData').textContent = '';
+    limparSorteio();
+    return;
+  }
+  
+  const concurso = concursos.find(c => c.numero == concursoNum);
+  if (!concurso) return;
+  
+  getElemento('concursoData').textContent = concurso.data;
+  
+  limparSorteio();
+  
+  // OTIMIZAÇÃO: Usar children[index] é mais rápido que querySelector
+  concurso.dezenas.forEach(num => {
+    sorteioSet.add(num);
+    const elem = getElemento('gridSorteio').children[num - 1];
+    if (elem) {
+      elem.classList.add('sorteado');
+      elem.setAttribute('aria-pressed', 'true');
+    }
+  });
+  
+  atualizarContador('Sorteio', sorteioSet);
+  salvarEstado();
+}
+
+function limparSorteio() {
+  sorteioSet.clear();
+  Array.from(getElemento('gridSorteio').children).forEach(num => {
+    num.classList.remove('sorteado');
+    num.setAttribute('aria-pressed', 'false');
+  });
+  atualizarContador('Sorteio', sorteioSet);
+}
+
+/* ============================================
+   CONTADORES
+============================================ */
+
+function atualizarContador(id, set, maxNumeros = CONFIG.MAX_NUMEROS) {
+  const contador = getElemento(`contador${id}`);
   if (!contador) return;
   
   const qtd = set.size;
   contador.textContent = `${qtd}/${maxNumeros}`;
   
-  if (qtd === maxNumeros) {
-    contador.classList.add('completo');
-  } else {
-    contador.classList.remove('completo');
-  }
+  // OTIMIZAÇÃO: toggle simplificado
+  contador.classList.toggle('completo', qtd === maxNumeros);
 }
 
-/* TOAST DE NOTIFICAÇÃO */
+/* ============================================
+   TOAST (OTIMIZADO)
+============================================ */
+
 function mostrarToast(mensagem) {
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = mensagem;
-  document.body.appendChild(toast);
+  // OTIMIZAÇÃO: Remover toast anterior se existir (evita múltiplos toasts)
+  if (toastAtual) {
+    toastAtual.remove();
+  }
+  
+  toastAtual = document.createElement('div');
+  toastAtual.className = 'toast';
+  toastAtual.textContent = mensagem;
+  document.body.appendChild(toastAtual);
   
   setTimeout(() => {
-    toast.style.animation = 'toastIn 0.3s ease-out reverse';
-    setTimeout(() => toast.remove(), 300);
-  }, 2000);
+    toastAtual.classList.add('saindo');
+    setTimeout(() => {
+      if (toastAtual) {
+        toastAtual.remove();
+        toastAtual = null;
+      }
+    }, 300);
+  }, CONFIG.TOAST_DURATION);
 }
 
-/* CRIAR GRADES */
+/* ============================================
+   CRIAR GRADES (OTIMIZADO)
+============================================ */
+
 function criarGrade(id, contadorId = null){
-  let grid = document.getElementById(id);
+  let grid = getElemento(id);
   let set = new Set();
   let frag = document.createDocumentFragment();
+  const isSorteio = id === 'gridSorteio';
 
-  for(let i=1;i<=25;i++){
+  for(let i=1;i<=CONFIG.TOTAL_NUMEROS;i++){
     let d = document.createElement("div");
     d.className = "num";
-    d.innerText = String(i).padStart(2,'0');
+    d.innerText = formatarNumero(i);
     d.setAttribute('role', 'button');
     d.setAttribute('aria-label', `Número ${i}`);
     d.setAttribute('tabindex', '0');
@@ -399,26 +752,19 @@ function criarGrade(id, contadorId = null){
     const toggleNumero = () => {
       if(set.has(i)){
         set.delete(i);
-        d.classList.remove("sorteado");
-        d.classList.remove("jogo");
+        d.classList.remove("sorteado", "jogo");
         d.setAttribute('aria-pressed', 'false');
       } 
       else {
-        if(set.size >= 15) {
-          mostrarToast('Máximo de 15 números atingido');
+        if(set.size >= CONFIG.MAX_NUMEROS) {
+          mostrarToast(`Máximo de ${CONFIG.MAX_NUMEROS} números atingido`);
           return;
         }
         set.add(i);
         d.setAttribute('aria-pressed', 'true');
-
-        if(id === "gridSorteio"){
-          d.classList.add("sorteado");
-        } else {
-          d.classList.add("jogo");
-        }
+        d.classList.add(isSorteio ? "sorteado" : "jogo");
       }
       
-      // Atualizar contador
       if(contadorId) {
         atualizarContador(contadorId, set);
       }
@@ -450,9 +796,15 @@ let jogo2 = criarGrade("gridJ2", "J2");
 let jogo3 = criarGrade("gridJ3", "J3");
 let jogo4 = criarGrade("gridJ4", "J4");
 
-/* LIMPAR TUDO */
+/* ============================================
+   LIMPAR TUDO
+============================================ */
+
 function limparTudo() {
   if(!confirm('Deseja realmente limpar todas as seleções?')) return;
+  
+  getElemento('selectConcurso').value = '';
+  getElemento('concursoData').textContent = '';
   
   [sorteioSet, jogo1, jogo2, jogo3, jogo4].forEach(set => set.clear());
   
@@ -461,21 +813,23 @@ function limparTudo() {
     num.setAttribute('aria-pressed', 'false');
   });
   
-  // Atualizar contadores
   atualizarContador('Sorteio', sorteioSet);
   atualizarContador('J1', jogo1);
   atualizarContador('J2', jogo2);
   atualizarContador('J3', jogo3);
   atualizarContador('J4', jogo4);
   
-  document.getElementById('resultado').innerHTML = '';
-  localStorage.removeItem('lotofacilData');
+  getElemento('resultado').innerHTML = '';
+  localStorage.removeItem(CONFIG.STORAGE_KEY);
   mostrarToast('Todas as seleções foram limpas');
 }
 
-/* CONFERIR */
+/* ============================================
+   CONFERIR
+============================================ */
+
 function conferir(){
-  if(sorteioSet.size !== 15){
+  if(sorteioSet.size !== CONFIG.MAX_NUMEROS){
     mostrarToast('Selecione exatamente 15 dezenas sorteadas!');
     return;
   }
@@ -487,7 +841,6 @@ function conferir(){
     {nome:"Jogo 4", set:jogo4}
   ];
 
-  // Verificar se há pelo menos um jogo preenchido
   const temJogos = jogos.some(j => j.set.size > 0);
   if(!temJogos) {
     mostrarToast('Preencha pelo menos um jogo para conferir');
@@ -519,44 +872,54 @@ function conferir(){
 
     html += `<tr>
       <td><strong>${j.nome}</strong></td>
-      <td>${acertos.length > 0 ? acertos.map(n=>String(n).padStart(2,'0')).join(", ") : '-'}</td>
+      <td>${acertos.length > 0 ? acertos.map(formatarNumero).join(", ") : '-'}</td>
       <td class="${classe}">${qtd} acertos${emoji}</td>
     </tr>`;
   });
 
   html += "</table>";
   
-  const resultado = document.getElementById("resultado");
+  const resultado = getElemento("resultado");
   resultado.innerHTML = html;
   resultado.classList.add('show');
-
-  // Rolagem automática
-  document.getElementById("resultado").scrollIntoView({behavior:"smooth"});
+  resultado.scrollIntoView({behavior:"smooth"});
 }
 
-/* PERSISTÊNCIA - LocalStorage */
+/* ============================================
+   PERSISTÊNCIA
+============================================ */
+
 function salvarEstado() {
   const estado = {
+    concurso: getElemento('selectConcurso').value,
     sorteio: [...sorteioSet],
     jogo1: [...jogo1],
     jogo2: [...jogo2],
     jogo3: [...jogo3],
     jogo4: [...jogo4]
   };
-  localStorage.setItem('lotofacilData', JSON.stringify(estado));
+  localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(estado));
 }
 
 function carregarEstado() {
-  const data = localStorage.getItem('lotofacilData');
+  const data = localStorage.getItem(CONFIG.STORAGE_KEY);
   if(!data) return;
   
   try {
     const estado = JSON.parse(data);
     
+    if(estado.concurso) {
+      getElemento('selectConcurso').value = estado.concurso;
+      carregarConcurso();
+      return;
+    }
+    
+    // OTIMIZAÇÃO: Função helper para evitar repetição
     const restaurarSet = (set, numeros, gridId, classe) => {
+      const grid = getElemento(gridId);
       numeros.forEach(num => {
         set.add(num);
-        const elem = document.querySelector(`#${gridId} .num:nth-child(${num})`);
+        const elem = grid.children[num - 1];
         if(elem) {
           elem.classList.add(classe);
           elem.setAttribute('aria-pressed', 'true');
@@ -570,7 +933,6 @@ function carregarEstado() {
     restaurarSet(jogo3, estado.jogo3, 'gridJ3', 'jogo');
     restaurarSet(jogo4, estado.jogo4, 'gridJ4', 'jogo');
     
-    // Atualizar contadores
     atualizarContador('Sorteio', sorteioSet);
     atualizarContador('J1', jogo1);
     atualizarContador('J2', jogo2);
@@ -582,10 +944,27 @@ function carregarEstado() {
   }
 }
 
-// Carregar estado salvo ao iniciar
-window.addEventListener('DOMContentLoaded', carregarEstado);
+/* ============================================
+   INICIALIZAÇÃO E EVENTOS
+============================================ */
+window.addEventListener('DOMContentLoaded', async () => {
+  await buscarUltimosConcursos();
+  carregarEstado();
+});
+
+// OTIMIZAÇÃO: Não recarrega a página ao voltar online (mantém estado do usuário)
+window.addEventListener('online', async () => {
+  console.log('Voltou online - recarregando concursos...');
+  mostrarToast('Conexão restabelecida! Recarregando concursos...');
+  await buscarUltimosConcursos();
+});
+
+window.addEventListener('offline', () => {
+  console.log('Ficou offline');
+  mostrarModoOffline();
+  mostrarToast('Você está offline. Selecione as dezenas manualmente.');
+});
 </script>
 
 </body>
 </html>
-
