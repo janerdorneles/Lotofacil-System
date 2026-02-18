@@ -511,7 +511,7 @@ const CONFIG = {
   TOTAL_NUMEROS: 25,
   QUANTIDADE_CONCURSOS: 15, // Quantidade de concursos a buscar da API
   API_URL: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil',
-  TOAST_DURATION: 2000,
+  TOAST_DURATION: 4000,
   STORAGE_KEY: 'lotofacilData'
 };
 
@@ -882,6 +882,19 @@ async function conferir(){
   const temJogos = jogos.some(j => j.set.size > 0);
   if(!temJogos) {
     mostrarToast('Preencha pelo menos um jogo para conferir');
+    return;
+  }
+
+  // VALIDAÇÃO: Verificar se os jogos preenchidos têm exatamente 15 dezenas
+  const jogosIncompletos = jogos
+    .filter(j => j.set.size > 0 && j.set.size < CONFIG.MAX_NUMEROS)
+    .map(j => `${j.nome} (${j.set.size}/15)`);
+  
+  if(jogosIncompletos.length > 0) {
+    const mensagem = jogosIncompletos.length === 1
+      ? `${jogosIncompletos[0]} precisa ter 15 dezenas selecionadas`
+      : `Os jogos ${jogosIncompletos.join(', ')} precisam ter 15 dezenas selecionadas`;
+    mostrarToast(mensagem);
     return;
   }
 
