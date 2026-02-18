@@ -214,7 +214,7 @@ body {
 /* RESULTADO */
 #resultado {
   margin-top: 15px;
-  max-width: 650px;
+  max-width: 800px;
   width: 100%;
   margin: 15px auto;
   background: #020617;
@@ -256,6 +256,10 @@ th {
   color: #93c5fd;
 }
 
+th:last-child {
+  text-align: right;
+}
+
 .acerto-premio {
   color: #7dd3fc;
   font-weight: bold;
@@ -270,6 +274,32 @@ th {
 .jogo-vazio {
   color: #64748b;
   font-style: italic;
+}
+
+.premio-valor {
+  color: #34d399;
+  font-weight: bold;
+  text-align: right;
+}
+
+.premio-zero {
+  color: #64748b;
+  text-align: right;
+}
+
+.total-premios {
+  background: #1e293b;
+  font-weight: bold;
+  color: #fffaf0;
+  font-size: 16px;
+}
+
+.total-premios .valor-total {
+  color: #fbbf24;
+}
+
+.total-premios td {
+  padding: 12px 8px;
 }
 
 footer {
@@ -479,14 +509,11 @@ footer {
 const CONFIG = {
   MAX_NUMEROS: 15,
   TOTAL_NUMEROS: 25,
-  QTD_ULTIMOS_CONCURSOS: 90,
+  QUANTIDADE_CONCURSOS: 15, // Quantidade de concursos a buscar da API
   API_URL: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil',
   TOAST_DURATION: 2000,
   STORAGE_KEY: 'lotofacilData'
 };
-
-/* ⚙️ CONFIGURAÇÃO LEGADA (manter compatibilidade) */
-const QUANTIDADE_CONCURSOS = 7; // Mude para 3, 5, 7, 10, 15, etc.
 
 /* ESTADO GLOBAL */
 let concursos = [];
@@ -507,6 +534,12 @@ const getElemento = (id) => {
 
 // OTIMIZAÇÃO: Função de formatação centralizada
 const formatarNumero = (num) => String(num).padStart(2, '0');
+
+// OTIMIZAÇÃO: Função de formatação de moeda reutilizável
+const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 /* ============================================
    API - BUSCAR CONCURSOS
@@ -539,7 +572,7 @@ async function buscarUltimosConcursos() {
     
     // OTIMIZAÇÃO: Buscar todos em paralelo com Promise.all (muito mais rápido!)
     const promises = [];
-    for (let i = 0; i < QUANTIDADE_CONCURSOS; i++) {
+    for (let i = 0; i < CONFIG.QUANTIDADE_CONCURSOS; i++) {
       const numConcurso = numeroUltimo - i;
       promises.push(
         fetch(`${CONFIG.API_URL}/${numConcurso}`, { cache: 'no-store' })
@@ -808,9 +841,14 @@ function limparTudo() {
   
   [sorteioSet, jogo1, jogo2, jogo3, jogo4].forEach(set => set.clear());
   
-  document.querySelectorAll('.num').forEach(num => {
-    num.classList.remove('sorteado', 'jogo');
-    num.setAttribute('aria-pressed', 'false');
+  // OTIMIZAÇÃO: Limpar usando referências às grades em vez de querySelectorAll
+  const grids = ['gridSorteio', 'gridJ1', 'gridJ2', 'gridJ3', 'gridJ4'];
+  grids.forEach(id => {
+    const grid = getElemento(id);
+    Array.from(grid.children).forEach(num => {
+      num.classList.remove('sorteado', 'jogo');
+      num.setAttribute('aria-pressed', 'false');
+    });
   });
   
   atualizarContador('Sorteio', sorteioSet);
@@ -828,7 +866,7 @@ function limparTudo() {
    CONFERIR
 ============================================ */
 
-function conferir(){
+async function conferir(){
   if(sorteioSet.size !== CONFIG.MAX_NUMEROS){
     mostrarToast('Selecione exatamente 15 dezenas sorteadas!');
     return;
@@ -847,19 +885,54 @@ function conferir(){
     return;
   }
 
-  let html = "<table><tr><th>Jogo</th><th>Dezenas Acertadas</th><th>Acertos</th></tr>";
+  // Buscar dados do prêmio da API
+  let premios = {};
+  let dadosPremio15 = { ganhadores: 0, valorPorGanhador: 0 };
+  const concursoNum = getElemento('selectConcurso').value;
+  let modoOffline = !concursoNum; // Se não tem concurso selecionado, está offline
+  
+  if(concursoNum) {
+    try {
+      const response = await fetch(`https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/${concursoNum}`);
+      if(response.ok) {
+        const data = await response.json();
+        // Extrair valores dos prêmios por faixa
+        if(data.listaRateioPremio) {
+          data.listaRateioPremio.forEach(faixa => {
+            premios[faixa.faixa] = faixa.valorPremio;
+            // Capturar dados da faixa 1 (15 acertos)
+            if(faixa.faixa === 1) {
+              dadosPremio15.ganhadores = faixa.numeroDeGanhadores || 0;
+              dadosPremio15.valorPorGanhador = faixa.valorPremio || 0;
+            }
+          });
+        }
+      }
+    } catch(e) {
+      console.log('Não foi possível buscar prêmios da API');
+    }
+  }
+
+  let html = "<table><tr><th>Jogo</th><th>Dezenas Acertadas</th><th>Acertos</th><th>Prêmio</th></tr>";
+  let totalPremios = 0;
 
   jogos.forEach(j => {
     if(j.set.size === 0) {
       html += `<tr>
         <td>${j.nome}</td>
-        <td class="jogo-vazio" colspan="2">Jogo não preenchido</td>
+        <td class="jogo-vazio" colspan="3">Jogo não preenchido</td>
       </tr>`;
       return;
     }
 
-    let acertos = [...j.set].filter(n => sorteioSet.has(n)).sort((a,b) => a-b);
-    let qtd = acertos.length;
+    // OTIMIZAÇÃO: Filtrar acertos de forma mais eficiente
+    const acertos = [];
+    for(const num of j.set) {
+      if(sorteioSet.has(num)) acertos.push(num);
+    }
+    acertos.sort((a,b) => a-b);
+    
+    const qtd = acertos.length;
 
     let classe = "";
     if(qtd === 15) classe = "acerto-15";
@@ -870,12 +943,67 @@ function conferir(){
     else if(qtd >= 14) emoji = " 🎉";
     else if(qtd >= 11) emoji = " ✅";
 
+    // Determinar valor do prêmio
+    let valorPremio = 0;
+    let classeValor = "premio-zero";
+    let textoValor = "";
+    
+    // Se estiver em modo offline, exibir "Offline" para todos os jogos
+    if(modoOffline) {
+      textoValor = "Offline";
+      classeValor = "premio-zero";
+    } else {
+      if(qtd >= 11) {
+        // Faixa 1 = 15 acertos, Faixa 2 = 14 acertos, Faixa 3 = 13 acertos, etc.
+        const faixa = 16 - qtd; // 15->1, 14->2, 13->3, 12->4, 11->5
+        valorPremio = premios[faixa] || 0;
+        
+        if(valorPremio > 0) {
+          totalPremios += valorPremio;
+          classeValor = "premio-valor";
+        }
+      }
+      
+      // OTIMIZAÇÃO: Usar função formatarMoeda reutilizável
+      const valorFormatado = formatarMoeda(valorPremio);
+      textoValor = `R$ ${valorFormatado}`;
+    }
+
     html += `<tr>
       <td><strong>${j.nome}</strong></td>
       <td>${acertos.length > 0 ? acertos.map(formatarNumero).join(", ") : '-'}</td>
       <td class="${classe}">${qtd} acertos${emoji}</td>
+      <td class="${classeValor}">${textoValor}</td>
     </tr>`;
   });
+
+  // Adicionar linha de total
+  if(modoOffline) {
+    html += `<tr class="total-premios">
+      <td colspan="3" style="text-align: right;">Total do(s) prêmio(s):</td>
+      <td class="valor-total" style="text-align: right;">Offline</td>
+    </tr>`;
+  } else {
+    // OTIMIZAÇÃO: Usar função formatarMoeda reutilizável
+    const totalFormatado = formatarMoeda(totalPremios);
+    
+    let textoPremio15 = "";
+    if(dadosPremio15.ganhadores === 0 || dadosPremio15.valorPorGanhador === 0) {
+      textoPremio15 = "Acumulado";
+    } else {
+      const ganhadoresFormatado = dadosPremio15.ganhadores.toLocaleString('pt-BR');
+      const valorGanhadorFormatado = formatarMoeda(dadosPremio15.valorPorGanhador);
+      textoPremio15 = `${ganhadoresFormatado} aposta${dadosPremio15.ganhadores !== 1 ? 's' : ''} ganhadora${dadosPremio15.ganhadores !== 1 ? 's' : ''}, R$ ${valorGanhadorFormatado}`;
+    }
+    
+    html += `<tr class="total-premios">
+      <td colspan="2" style="text-align: left; color: #fffaf0; font-size: 13px;">
+        <strong>Premiação 15 acertos:</strong> ${textoPremio15}
+      </td>
+      <td style="text-align: right;">Total do(s) prêmio(s):</td>
+      <td class="valor-total" style="text-align: right;">R$ ${totalFormatado}</td>
+    </tr>`;
+  }
 
   html += "</table>";
   
